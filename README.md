@@ -2,6 +2,7 @@
 **React + Tailwind (Web) | React Native + Expo (Mobile) | TypeScript Node (Server)**  
 
 ---
+## Video Link for Repo/Project Walkthrough : https://share.zight.com/NQum6oXr
 
 ## ⚙️ Pre-requisites
 
