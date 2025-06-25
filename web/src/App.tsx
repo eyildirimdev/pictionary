@@ -23,39 +23,48 @@ export default function App() {
   const titleRef   = useRef<HTMLDivElement>(null);
   const btnRef     = useRef<HTMLButtonElement>(null);
 
-  /* ------------------------------------------------ sockets --------- */
-  useEffect(() => {
-    socket.emit('joinRoom', { roomId });
+/* ------------------------------------------------------------------ */
+/*  SOCKET: drawing data coming from the server                       */
+/* ------------------------------------------------------------------ */
+useEffect(() => {
+  socket.emit('joinRoom', { roomId });
 
-    /** draw any stroke coming over the wire */
-    const handleStroke = (raw: any) => {
-      console.log('[RAW] stroke:', raw);
-      const { x0,y0,x1,y1,w,h } = raw;
-      if (![x0,y0,x1,y1].every(n=>typeof n==='number' && !isNaN(n))) {
-        console.warn('[WEB] bad coords, skip'); return;
-      }
+  /** draw any stroke coming over the wire */
+  const handleStroke = (raw: any) => {
+    console.log('[RAW] stroke:', raw);
+    const { x0, y0, x1, y1 } = raw;
 
-      const box = canvasRef.current?.getBoundingClientRect();
-      if (!box) return;
+    // guard-clause: all numbers & not NaN
+    if (![x0, y0, x1, y1].every(n => typeof n === 'number' && !isNaN(n))) {
+      console.warn('[WEB] bad coords, skip'); 
+      return;
+    }
 
-      /* pick scale factors */
-      const sx = box.width  / (w ?? box.width);
-      const sy = box.height / (h ?? box.height);
+    /* ------------------------------------------------------------ */
+    /*  incoming coords are normalised (0-1)                        */
+    /*  just multiply by OUR canvas size – do NOT use raw.w / raw.h */
+    /* ------------------------------------------------------------ */
+    const box = canvasRef.current?.getBoundingClientRect();
+    if (!box) return;
 
-      const d  = `M${x0*sx} ${y0*sy} L${x1*sx} ${y1*sy}`;
-      console.log('[WEB] drawing path:', d);
-      pathsRef.current.push(d);
-      setTick(t=>t+1);
-    };
+    const absX0 = x0 * box.width;
+    const absY0 = y0 * box.height;
+    const absX1 = x1 * box.width;
+    const absY1 = y1 * box.height;
 
-    socket.on('stroke', handleStroke);
-    socket.on('clear', ()   => { pathsRef.current=[]; setTick(t=>t+1); });
-    socket.on('word',  setWord);
-    socket.on('correctGuess', (t:string)=>alert(`🎉 Correct! «${t}»`));
+    const d = `M${absX0} ${absY0} L${absX1} ${absY1}`;
+    console.log('[WEB] drawing path:', d);
+    pathsRef.current.push(d);
+    setTick(t => t + 1);                       // trigger re-render
+  };
 
-    return () => socket.off('stroke', handleStroke);
-  }, [roomId]);
+  socket.on('stroke', handleStroke);
+  socket.on('clear', () => { pathsRef.current = []; setTick(t => t + 1); });
+  socket.on('word',  setWord);
+  socket.on('correctGuess', (t: string) => alert(`🎉 Correct! «${t}»`));
 
+  return () => socket.off('stroke', handleStroke);
+}, [roomId]);
   /* ------------------------------------------------ helpers --------- */
   const emitStroke = (p0:Point,p1:Point) => {
     const box = canvasRef.current!.getBoundingClientRect();
