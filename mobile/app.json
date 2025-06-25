@@ -1,0 +1,13 @@
+{
+  "expo": {
+    "name": "PictionaryMobile",
+    "slug": "pictionary-mobile",
+    "version": "1.0.0",
+    "scheme": "pictionary",
+    "platforms": ["ios", "android"],
+    "sdkVersion": "50.0.0",
+    "extra": {
+      "expoPublicServerUrl": "http://localhost:4000"
+    }
+  }
+}

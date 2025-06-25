@@ -1,0 +1,25 @@
+{
+  "name": "pictionary",
+  "private": true,
+  "version": "0.0.0",
+  "workspaces": [
+    "server",
+    "web",
+    "mobile"
+  ],
+  "scripts": {
+    "dev": "concurrently -k -n \"SERVER,WEB\" -c \"blue,cyan\" \"pnpm --filter server dev\" \"pnpm --filter web dev\"",
+    "mobile": "pnpm --filter mobile exec expo start --clear --port 8081",
+    "lint": "eslint . --ext .ts,.tsx"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3",
+    "eslint": "^8.57.0",
+    "kill-port": "^2.0.1",
+    "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "@babel/runtime": "^7.27.6"
+  }
+}
