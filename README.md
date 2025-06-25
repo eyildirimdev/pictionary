@@ -13,7 +13,7 @@
 
 ```bash
 # 1  Clone and install
-git clone https://github.com/your-org/pictionary.git
+git clone https://github.com/eyildirimdev/pictionary.git
 cd pictionary
 pnpm install          # installs all 3 workspaces
 
