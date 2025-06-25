@@ -1,150 +1,151 @@
-# 🎨 Pictionary — Full-Stack Realtime Draw-and-Guess
-
-Monorepo (pnpm workspaces)  
-Node 20 + TypeScript • Vite React 18 • Expo SDK 50 • Socket.IO
+# Pictionary – Full-Stack Demo  
+**React + Tailwind (Web) | React Native + Expo (Mobile) | TypeScript Node (Server)**  
 
 ---
 
-## 0  Prerequisites
+## 1. Quick start (local LAN)
 
-| What                | Why                    | Install                                                                 |
-|---------------------|------------------------|-------------------------------------------------------------------------|
-| Node 20 arm64 (Apple Silicon) | Server & tooling        | `brew install nvm` → `nvm install 20 --arch=arm64`                      |
-| pnpm ≥ 8            | Workspace & lockfile   | `npm i -g pnpm`                                                        |
-| Xcode + iOS Sim     | iOS emulation          | Xcode ▸ Settings ▸ Platforms                                            |
-| Expo CLI (local)    | Native dev server      | auto-bundled in `node_modules/expo`                                    |
-| Expo Go (phone)     | Test on real device    | App Store / Google Play                                                |
+> **Minimum versions**  
+> • **macOS Apple Silicon** (Rosetta not recommended)  
+> • **Node 20 arm64** — managed with [`nvm`](https://github.com/nvm-sh/nvm)  
+> • **pnpm 10** – `npm i -g pnpm@latest`  
+> • **Xcode 15 / iOS simulator** (for the mobile app)  
 
-**Rosetta warning**  
-Run your terminal without Rosetta (`arch` should print `arm64`). Mixed installs break native modules (esbuild, rollup-darwin-x64, …).
-
----
-
-## 1  Clone & Install
-
-```sh
+```bash
+# 1  Clone and install
 git clone https://github.com/your-org/pictionary.git
 cd pictionary
-pnpm install            # installs root + server + web + mobile
+pnpm install          # installs all 3 workspaces
+
+# 2  Create .env at repo root (one line; replace with your LAN IP)
+echo "CLIENT_ORIGIN=http://192.168.1.61:5173" > .env
 ```
 
----
+**1-click dev workflow**
 
-## 2  Environment
-
-Copy & edit:
-
-```sh
-cp .env.example .env
-```
-
-```env
-# .env
-PORT=4000                        # Express / Socket.IO
-CLIENT_ORIGIN=http://localhost:5173
-EXPO_PUBLIC_SERVER_URL=http://YOUR_LAN_IP:4000   # phone ↔ server
-```
-
-Use your laptop's LAN IPv4 so real phones can reach the server.
-
----
-
-## 3  One-Shot Dev
-
-```sh
+```bash
 pnpm dev
 ```
 
-| Service      | Port | Notes                        |
-|--------------|------|------------------------------|
-| Web (Vite)   | 5173 | http://localhost:5173        |
-| API / WS     | 4000 | logs in terminal             |
-| Expo Dev     | 8081 | press i (iOS) or a (Android) |
+| What it does         | Port | Terminal tab         |
+|---------------------|------|----------------------|
+| server   tsx watch  | 4000 | tab #1 (auto-restarted) |
+| web      vite       | 5173 | tab #1               |
+| mobile   not started| —    | —                    |
 
-The script auto-kills ports 4000/5173/8081 first.
+**Why the mobile app is separate**  
+Metro/Expo CLI is interactive and hogs STDIN. Running it in the same concurrently group would block your keyboard shortcuts.
+➜ Open a second terminal tab and run:
 
-<details><summary>Run individually</summary>
-
-```sh
-pnpm --filter server dev    # ts-node-dev
-pnpm --filter web dev       # Vite HMR
-pnpm --filter mobile dev    # Expo, then press i/a
+```bash
+# tab #2
+pnpm --filter mobile exec expo start --clear
 ```
+
+- Wait for Metro to say Metro waiting on exp://…:8081
+- Press i to launch the iOS simulator.
+
+⸻
+
+## 2. Workspace layout & scripts
+
+```
+.
+├─ server/   # ts-node backend (socket.io)
+│  └─ pnpm dev   →  tsx watch src/index.ts
+│
+├─ web/      # React + Vite + Tailwind
+│  └─ pnpm dev   →  vite
+│
+└─ mobile/   # Expo SDK 50
+   └─ pnpm dev   →  expo start
+```
+
+**Global root scripts:**
+
+| Script      | What it does                                      |
+|-------------|---------------------------------------------------|
+| pnpm dev    | Kills residual ports → starts server + web concurrently. |
+| pnpm lint   | ESLint across all workspaces.                     |
+
+⸻
+
+## 3. Ports & collision recovery
+
+| Port | Purpose         | Fix if busy                        |
+|------|----------------|------------------------------------|
+| 4000 | Node/Socket.IO | kill -9 $(lsof -ti:4000)            |
+| 5173 | Vite dev server| idem                               |
+| 8081 | Metro Bundler  | npx kill-port 8081                  |
+
+If you ever see "Port 8081 is running this app in another window"
+press Ctrl-C in every Metro terminal, then run the Expo command again.
+
+⸻
+
+## 4. Building for production
+
+### Web bundle
+
+```bash
+cd web
+pnpm build          # vite → dist/
+```
+
+Serve web/dist from any static host or behind Nginx.
+
+### Server
+
+```bash
+cd server
+pnpm build          # (optional) tsc --build
+node dist/index.js
+```
+
+### Mobile (EAS build optional)
+
+For App Store / TestFlight you can run:
+
+```bash
+cd mobile
+pnpm exec eas build --profile release --platform ios
+```
+
+Read the Expo EAS docs for certificates & store submission.
+
+⸻
+
+## 5. Troubleshooting
+
+| Symptom                                 | Cause                        | Remedy                                                                 |
+|-----------------------------------------|------------------------------|------------------------------------------------------------------------|
+| Rollup or esbuild "wrong architecture"  | Installed under Rosetta x86  | Re-install Node arm64: nvm install 20 --arch=arm64 then pnpm install again. |
+| Metro stuck on "No apps connected"      | Simulator not running or bad LAN IP | Press i in Expo CLI, ensure wifi network matches CLIENT_ORIGIN IP.     |
+| Nothing draws on web when drawing on phone | Mismatched normalised coords | Ensure both platforms emit normalised (0-1) positions (already fixed in current code). |
+| Same port already in use                | Previous run crashed         | pnpm run fix-ports if you make an alias, or kill as above.              |
+
+⸻
+
+## 6. FAQ
+
+<details>
+<summary>Why not run Expo inside <code>pnpm dev</code>?</summary>
+
+expo start wants to read key-press shortcuts. If it shares STDIN with
+concurrently it can freeze or swallow logs.
+Running it in its own tab keeps shortcuts like r (reload) or m
+(menu) working.
 
 </details>
 
----
+<details>
+<summary>Can I change rooms?</summary>
 
-## 4  Real Device Testing
+Edit roomId in both web/src/App.tsx and mobile/App.tsx or read
+it from URL / deep link.
 
-1. Phone & laptop on same Wi-Fi.
-2. Put laptop's IP in `.env` → `EXPO_PUBLIC_SERVER_URL`.
-3. Restart `pnpm dev`.
-4. Open Expo Go → scan QR in terminal.
+</details>
 
----
+⸻
 
-## 5  Troubleshooting
-
-| Symptom                                         | Fix                                                                 |
-|-------------------------------------------------|---------------------------------------------------------------------|
-| EADDRINUSE                                      | Another app on port → `lsof -i :4000` then `kill -9 <pid>`          |
-| esbuild … needs @esbuild/darwin-arm64 but x64 found | Re-install outside Rosetta: `rm -rf node_modules pnpm-lock.yaml` → `pnpm i` |
-| Expo "no apps connected"                        | Phone not on same LAN or firewall blocks 8081                       |
-
----
-
-## 6  Production Builds
-
-### Web (static)
-
-```sh
-pnpm --filter web build   # → web/dist
-```
-
-Deploy `web/dist` to Vercel / Netlify / S3 etc.
-
-### Server (Node)
-
-```sh
-pnpm --filter server build   # tsc → server/dist
-node server/dist/index.js    # or pm2 / docker
-```
-
-### Native apps
-
-```sh
-pnpm --filter mobile exec eas login          # once
-pnpm --filter mobile exec eas build:configure
-pnpm --filter mobile exec eas build --platform ios    # or android
-```
-
----
-
-## 7  Scripts Cheat-Sheet
-
-| Command                  | Scope   | Description            |
-|--------------------------|---------|------------------------|
-| pnpm dev                 | root    | Run server + web + mobile concurrently |
-| pnpm lint                | root    | ESLint all workspaces  |
-| pnpm --filter web build  | web     | Production bundle      |
-| pnpm --filter server dev | server  | Hot-reload API         |
-| pnpm --filter mobile dev | mobile  | Expo CLI               |
-
----
-
-## 8  Repo Layout
-
-```
-pictionary/
-├─ server/   ← Express + Socket.IO
-│  └─ src/index.ts
-├─ web/      ← React 18 + Vite + Tailwind
-│  └─ src/App.tsx
-├─ mobile/   ← Expo SDK 50 (React Native)
-│  └─ App.tsx
-├─ .env
-└─ pnpm-workspace.yaml
-```
-
-Happy drawing & guessing! 🖍️
+Happy drawing! 🖌️
