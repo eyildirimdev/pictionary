@@ -4,17 +4,24 @@
   "private": true,
   "main": "index.js",
   "scripts": {
-    "dev": "expo start"
+    "dev": "expo start",
+    "start": "expo start --dev-client",
+    "android": "expo run:android",
+    "ios": "expo run:ios"
   },
   "dependencies": {
     "@babel/runtime": "^7.27.6",
-    "expo": "^50.0.0",
+    "expo": "^50.0.21",
+    "expo-status-bar": "~1.11.1",
     "react": "18.2.0",
     "react-native": "0.73.6",
     "react-native-svg": "14.1.0",
     "socket.io-client": "^4.7.5"
   },
   "devDependencies": {
+    "@babel/core": "^7.20.0",
+    "@types/react": "~18.2.79",
+    "@types/react-native": "^0.73.0",
     "typescript": "^5.4.0"
   }
 }

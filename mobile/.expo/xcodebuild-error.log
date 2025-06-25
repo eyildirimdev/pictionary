@@ -1,0 +1,11 @@
+--- xcodebuild: WARNING: Using the first of multiple matching destinations:
+{ platform:iOS Simulator, arch:arm64, id:45B9E48D-6B95-4BDF-A40A-8D0DCB1BA55A, OS:18.2, name:iPhone 16 Pro }
+{ platform:iOS Simulator, arch:x86_64, id:45B9E48D-6B95-4BDF-A40A-8D0DCB1BA55A, OS:18.2, name:iPhone 16 Pro }
+2025-06-25 11:18:46.759 xcodebuild[1813:37948889]  DVTDeveloperAccountManager: Failed to load credentials for uudmrci@gmail.com: Error Domain=DVTDeveloperAccountCredentialsError Code=0 "Invalid credentials in keychain for uudmrci@gmail.com, missing Xcode-Token" UserInfo={NSLocalizedDescription=Invalid credentials in keychain for uudmrci@gmail.com, missing Xcode-Token}
+** BUILD FAILED **
+
+
+The following build commands failed:
+	CompileC /Users/emir/Library/Developer/Xcode/DerivedData/PictionaryMobile-dnaygsmafbtonwdtdevwwrcvkryj/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/fmt.build/Objects-normal/arm64/format.o /Users/emir/Downloads/pictionary-starter/mobile/ios/Pods/fmt/src/format.cc normal arm64 c++ com.apple.compilers.llvm.clang.1_0.compiler (in target 'fmt' from project 'Pods')
+	Building workspace PictionaryMobile with scheme PictionaryMobile and configuration Debug
+(2 failures)

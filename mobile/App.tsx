@@ -17,12 +17,13 @@ import Svg, { Path, Defs, LinearGradient, Stop } from 'react-native-svg';
 const { width, height } = Dimensions.get('window');
 const socket = io(process.env.EXPO_PUBLIC_SERVER_URL ?? 'http://localhost:4000');
 
+
 export default function App() {
   const [roomId] = useState('lobby');
   const [paths, setPaths] = useState<string[]>([]);
   const [word, setWord] = useState('');
   const [inputValue, setInputValue] = useState('');
-  const [canvasLayout, setCanvasLayout] = useState({ x: 0, y: 0, width: 0, height: 0 });
+  const [isDrawing, setIsDrawing] = useState(false);
   
   // Animation values
   const titleScale = useRef(new Animated.Value(1)).current;
@@ -30,16 +31,13 @@ export default function App() {
   const clearButtonScale = useRef(new Animated.Value(1)).current;
   const backgroundAnimation = useRef(new Animated.Value(0)).current;
   const pulseAnimation = useRef(new Animated.Value(1)).current;
-  const canvasRef = useRef<View>(null);
+  const prevPoint = useRef<{ x: number; y: number } | null>(null);
+  const currentPath = useRef('');
+  const isDrawingRef = useRef(false);
 
-  // Function to measure canvas position
-  const measureCanvas = () => {
-    if (canvasRef.current) {
-      canvasRef.current.measure((x, y, width, height, pageX, pageY) => {
-        setCanvasLayout({ x: pageX, y: pageY, width, height });
-      });
-    }
-  };
+  // Canvas size used for scaling by web
+  const mobileCanvasWidth  = width - 40;
+  const mobileCanvasHeight = height * 0.4;
 
   // Create pulsing animation for the word display
   useEffect(() => {
@@ -74,37 +72,81 @@ export default function App() {
 
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onPanResponderGrant: () => {
+      onStartShouldSetPanResponder: (evt, gestureState) => true,
+      onMoveShouldSetPanResponder: (evt, gestureState) => true,
+      onPanResponderGrant: (evt, gestureState) => {
+        console.log('🎨 Pan responder granted!');
+        
         // Scale animation when drawing starts
         Animated.spring(canvasScale, {
           toValue: 1.02,
           useNativeDriver: true,
         }).start();
-      },
-      onPanResponderMove: (_e, gesture) => {
-        // Use measured canvas position
-        const canvasX0 = gesture.x0 - canvasLayout.x;
-        const canvasY0 = gesture.y0 - canvasLayout.y;
-        const canvasX1 = gesture.moveX - canvasLayout.x;
-        const canvasY1 = gesture.moveY - canvasLayout.y;
         
-        // Clamp coordinates to canvas bounds
-        const clampedX0 = Math.max(0, Math.min(canvasLayout.width, canvasX0));
-        const clampedY0 = Math.max(0, Math.min(canvasLayout.height, canvasY0));
-        const clampedX1 = Math.max(0, Math.min(canvasLayout.width, canvasX1));
-        const clampedY1 = Math.max(0, Math.min(canvasLayout.height, canvasY1));
-        
-        const d = `M${clampedX0} ${clampedY0} L${clampedX1} ${clampedY1}`;
-        socket.emit('stroke', { roomId, x0: clampedX0, y0: clampedY0, x1: clampedX1, y1: clampedY1 });
-        setPaths((p) => [...p, d]);
+        const { locationX, locationY } = evt.nativeEvent;
+        console.log('🎨 Drawing started at:', locationX, locationY);
+        currentPath.current = `M${locationX},${locationY}`;
+        prevPoint.current = { x: locationX, y: locationY };
+        isDrawingRef.current = true;
+        setPaths(prev => [...prev, currentPath.current]);
+        socket.emit('stroke', {
+          roomId,
+          x0: locationX / mobileCanvasWidth, y0: locationY / mobileCanvasHeight,
+          x1: locationX / mobileCanvasWidth, y1: locationY / mobileCanvasHeight,
+          w: mobileCanvasWidth,
+          h: mobileCanvasHeight,
+        });
       },
-      onPanResponderRelease: () => {
+      onPanResponderMove: (evt, gestureState) => {
+        console.log('👆 MOVE EVENT CALLED!', gestureState.dx, gestureState.dy);
+        
+        const { locationX: moveX, locationY: moveY } = evt.nativeEvent;
+        console.log(`📍 Moving to: (${moveX}, ${moveY})`);
+        
+        if (!isDrawingRef.current || !prevPoint.current) return;
+        
+        // Continue the current path
+        currentPath.current += ` L${moveX},${moveY}`;
+        setPaths(prev => {
+          const next = [...prev];
+          next[next.length - 1] = currentPath.current;
+          return next;
+        });
+        
+        // Send to server
+        socket.emit('stroke', {
+          roomId,
+          x0: prevPoint.current.x / mobileCanvasWidth, y0: prevPoint.current.y / mobileCanvasHeight,
+          x1: moveX / mobileCanvasWidth,         y1: moveY/ mobileCanvasHeight,
+          w: mobileCanvasWidth,
+          h: mobileCanvasHeight,
+        });
+        
+        console.log(`✏️ Path updated: ${currentPath.current}`);
+        prevPoint.current = { x: moveX, y: moveY };
+      },
+      onPanResponderRelease: (evt, gestureState) => {
+        console.log('🏁 Drawing finished!');
+        
         // Reset scale when drawing ends
         Animated.spring(canvasScale, {
           toValue: 1,
           useNativeDriver: true,
         }).start();
+        
+        isDrawingRef.current = false;
+        currentPath.current = '';
+        prevPoint.current = null;
+      },
+      onPanResponderTerminate: (evt, gestureState) => {
+        console.log('⚠️ Gesture terminated');
+        currentPath.current = '';
+        isDrawingRef.current = false;
+        prevPoint.current = null;
+      },
+      onShouldBlockNativeResponder: (evt, gestureState) => {
+        // Always allow the pan responder to handle the touch
+        return true;
       }
     })
   ).current;
@@ -140,7 +182,9 @@ export default function App() {
       }),
     ]).start();
     
+    console.log('🗑️ Clear button pressed - clearing canvas');
     setPaths([]);
+    currentPath.current = '';
     socket.emit('clear', { roomId });
   };
 
@@ -153,29 +197,32 @@ export default function App() {
 
   useEffect(() => {
     socket.emit('joinRoom', { roomId });
-    socket.on('stroke', ({ x0, y0, x1, y1 }) => {
-      // Scale coordinates to match mobile canvas dimensions
-      const webCanvasWidth = 672; // max-w-2xl approximate width
-      const webCanvasHeight = 384; // h-96 height
-      const mobileCanvasWidth = width - 40;
-      const mobileCanvasHeight = height * 0.4;
-      
-      const scaleX = mobileCanvasWidth / webCanvasWidth;
-      const scaleY = mobileCanvasHeight / webCanvasHeight;
-      
-      const scaledX0 = x0 * scaleX;
-      const scaledY0 = y0 * scaleY;
-      const scaledX1 = x1 * scaleX;
-      const scaledY1 = y1 * scaleY;
-      
-      const d = `M${scaledX0} ${scaledY0} L${scaledX1} ${scaledY1}`;
-      setPaths((p) => [...p, d]);
+
+    socket.on(
+      'stroke',
+      ({ roomId: r, x0, y0, x1, y1 }) => {
+        // (optional) ignore our own strokes:
+        // if (r === roomId && isDrawingRef.current) return;
+
+        // denormalise to the local canvas size
+        const absX0 = x0 * mobileCanvasWidth;
+        const absY0 = y0 * mobileCanvasHeight;
+        const absX1 = x1 * mobileCanvasWidth;
+        const absY1 = y1 * mobileCanvasHeight;
+
+        const d = `M${absX0} ${absY0} L${absX1} ${absY1}`;
+        setPaths(p => [...p, d]);
+      }
+    );
+
+    socket.on('clear', () => {
+      setPaths([]);
+      currentPath.current = '';
     });
-    socket.on('clear', () => setPaths([]));
     socket.on('word', setWord);
-    socket.on('correctGuess', (t: string) => {
-      Alert.alert('🎉 Correct!', `"${t}"`, [{ text: 'Awesome!', style: 'default' }]);
-    });
+    socket.on('correctGuess', t =>
+      Alert.alert('🎉 Correct!', `"${t}"`)
+    );
   }, []);
 
   return (
@@ -229,37 +276,36 @@ export default function App() {
 
         {/* Drawing Canvas */}
         <Animated.View 
-          ref={canvasRef}
           style={[
-            styles.canvasContainer, 
+            styles.canvasContainer,
             { transform: [{ scale: canvasScale }] }
-          ]} 
-          {...panResponder.panHandlers}
-          onLayout={measureCanvas}
+          ]}
         >
           <View style={styles.canvasInner}>
-            <Svg height="100%" width="100%">
-              <Defs>
-                <LinearGradient id="strokeGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <Stop offset="0%" stopColor="#667eea" />
-                  <Stop offset="100%" stopColor="#764ba2" />
-                </LinearGradient>
-              </Defs>
-              {paths.map((d, idx) => (
-                <Path 
-                  key={idx} 
-                  d={d} 
-                  stroke="url(#strokeGradient)" 
-                  strokeWidth="3" 
-                  fill="none" 
-                  strokeLinecap="round" 
-                  strokeLinejoin="round"
-                />
-              ))}
-            </Svg>
-          </View>
-          <View style={styles.canvasOverlay}>
-            <Text style={styles.canvasHint}>✏️ Draw here</Text>
+            <View style={styles.canvasDrawArea} {...panResponder.panHandlers}>
+              <Svg height="100%" width="100%">
+                <Defs>
+                  <LinearGradient id="strokeGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <Stop offset="0%" stopColor="#667eea" />
+                    <Stop offset="100%" stopColor="#764ba2" />
+                  </LinearGradient>
+                </Defs>
+                {paths.map((d, idx) => (
+                  <Path 
+                    key={idx} 
+                    d={d} 
+                    stroke="url(#strokeGradient)" 
+                    strokeWidth="3" 
+                    fill="none" 
+                    strokeLinecap="round" 
+                    strokeLinejoin="round"
+                  />
+                ))}
+              </Svg>
+            </View>
+            <View style={styles.canvasOverlay}>
+              <Text style={styles.canvasHint}>✏️ Draw here</Text>
+            </View>
           </View>
         </Animated.View>
 
@@ -400,10 +446,13 @@ const styles = StyleSheet.create({
   },
   canvasInner: {
     flex: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 20,
     borderWidth: 2,
     borderColor: 'rgba(102, 126, 234, 0.4)',
+  },
+  canvasDrawArea: {
+    flex: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
   },
   canvasOverlay: {
     position: 'absolute',
